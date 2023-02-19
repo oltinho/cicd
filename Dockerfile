@@ -1,15 +1,35 @@
-FROM jenkins/jenkins:2.332.3-jdk11
-USER root
-RUN apt-get update && apt-get install -y lsb-release
-RUN curl -fsSLo /usr/share/keyrings/docker-archive-keyring.asc \
-  https://download.docker.com/linux/debian/gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) \
-  signed-by=/usr/share/keyrings/docker-archive-keyring.asc] \
-  https://download.docker.com/linux/debian \
-  $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-RUN apt-get update && apt-get install -y docker-ce-cli
-USER jenkins
-RUN jenkins-plugin-cli --plugins "blueocean:1.25.3 docker-workflow:1.28"
+FROM ubuntu:18.04
 
-##old 2.332.3
-##2.375.3
+# BASIC SYSTEM SETUP
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y wget nginx
+
+ENV HOME /home
+
+# SET PROJECT DIRECTORY
+ENV PROJECT_DIR $HOME/movieapp
+RUN mkdir PROJECT_DIR
+WORKDIR $PROJECT_DIR
+
+COPY . $PROJECT_DIR
+
+# SET UP NGINX
+RUN rm /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+RUN echo "daemon off;" >> /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/sites-available/movieapp
+RUN ln -s /etc/nginx/sites-available/movieapp /etc/nginx/sites-enabled/
+
+# SET UP MINICONDA
+ENV CONDA_DIR $HOME/miniconda3
+RUN wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash ./Miniconda3-latest-Linux-x86_64.sh -b -p $CONDA_DIR && \
+    rm Miniconda3-latest-Linux-x86_64.sh
+
+ENV PATH $CONDA_DIR/bin:$PATH
+
+RUN conda env create -f environment.yml
+RUN conda clean --all --yes
+
+EXPOSE 80
+
+CMD [ "/bin/bash", "entrypoint.sh" ]
